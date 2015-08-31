@@ -7,9 +7,9 @@ $(document).ready(function() {
     var indexURL = 'https://raw.githubusercontent.com/highgrounds' +
                     '/HighgroundsAssets/master/data/1stEdition.xml';
     var hgData = $.get(indexURL, function() {
-
-        unitLibrary = extractUnitData(parseHighgroundsXml(hgData));
-        cityLibrary = extractCityData(parseHighgroundsXml(hgData));
+        var hgJson = parseHighgroundsXml(hgData);
+        unitLibrary = extractUnitData(hgJson);
+        cityLibrary = extractCityData(hgJson);
         populateCities(cityLibrary, cityTemplate);
         populateUnits(unitLibrary, unitTemplate);
     });
