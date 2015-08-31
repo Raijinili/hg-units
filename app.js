@@ -153,7 +153,7 @@ function extractUnitData(hgJson) {
         var homeActions = [];
         var battleActions = [];
         var types = [];
-        var searchText = "";
+        //var searchText = "";
 
         // Populate homeActions and battleActions arrays.
         for (var j = 0 ; j < rawCard.ACTION.length ; j ++) {
@@ -172,7 +172,7 @@ function extractUnitData(hgJson) {
                              action.type;
 
             target.push({"type": actionType, "value": actionValue});
-            searchText += "!action " + actionValue + " " + actionType + " ";
+            //searchText += "!action " + actionValue + " " + actionType + " ";
         }
 
         // Populate types array. Raw types can be an array or an object.
@@ -197,6 +197,7 @@ function extractUnitData(hgJson) {
             "types": types
         };
 
+        /*
         searchText += ["!name", card.name,
                       card.types.join(" "),
                       card.cost.gold ? ["!cost",
@@ -211,7 +212,10 @@ function extractUnitData(hgJson) {
                       "!rarity", card.rarity,
                       "!edition", card.edition,
                       ].join(" ");
-        card.searchText = searchText;
+        */
+        card.domNode = $(unitTemplate(card));
+        
+        card.searchText = card.domNode.text().trim().split(/\s+/).join(" ");
         cards.push(card);
     }
     return cards;
@@ -258,9 +262,7 @@ function populateUnits(units, unitTemplate) {
     var unitNodes = [];
     for (var i = 0 ; i < units.length ; i++) {
         var unit = units[i];
-        unit["cache"] = unit["cache"] || $(unitTemplate(unit));
-        unitNodes.push(unit["cache"]);
-
+        unitNodes.push(unit.domNode);
     }
     
     $(".units").append(unitNodes);
