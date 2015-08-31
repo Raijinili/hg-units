@@ -8,11 +8,12 @@ $(document).ready(function() {
     var indexURL = 'https://raw.githubusercontent.com/highgrounds' +
                     '/HighgroundsAssets/master/data/1stEdition.xml';
     var hgData = $.get(indexURL, function() {
-
-        unitLibrary = extractUnitData(parseHighgroundsXml(hgData), unitTemplate);
-        cityLibrary = extractCityData(parseHighgroundsXml(hgData), cityTemplate);
-        populateCities(cityLibrary);
-        populateUnits(unitLibrary);
+        var hgJson = parseHighgroundsXml(hgData);
+        
+        unitLibrary = extractUnitData(hgJson, unitTemplate);
+        cityLibrary = extractCityData(hgJson, cityTemplate);
+        populateCities();
+        populateUnits();
     });
 
 
@@ -214,7 +215,7 @@ function extractUnitData(hgJson, unitTemplate) {
         */
         card._domNode = $(unitTemplate(card));
         
-        card._searchText = card.domNode.text().trim().split(/\s+/).join(" ").toLowerCase();
+        card._searchText = card._domNode.text().trim().split(/\s+/).join(" ").toLowerCase();
         cards.push(card);
     }
     return cards;
@@ -260,6 +261,7 @@ function cityFilter() {
                 return true;
             }
         }
+        return false;
     };
 }
 
@@ -274,7 +276,7 @@ function populateUnits() {
     for (var i = 0 ; i < unitLibrary.length ; i++) {
         unitNodes.push(unitLibrary[i]._domNode);
     }
-    
+    cityActiveUnits = unitNodes; //initialization
     $(".units").append(unitNodes);
 }
 
@@ -302,6 +304,7 @@ function searchFilter() {
             //later: assume all property names are valid.
             if (!unit.hasOwnProperty(propertyName)) {
                 delete properties[propertyName]; //delete invalid key when detected
+                continue;
             }
             var propertyValue = properties[propertyName];
             var unitValue = unit[propertyName].toLowerCase();
@@ -313,7 +316,7 @@ function searchFilter() {
         
         //Check all keywords.
         for (var i = 0 ; i < keywords.length ; i++) {
-            if (searchText.search(keyword[i]) == -1) {
+            if (searchText.search(keywords[i]) == -1) {
                 return false;
             }
         }
@@ -328,28 +331,26 @@ function searchFilter() {
 function applyAllFilters(){
     
     var cityValid = cityFilter();
-    var searchValid = searchFilter();
     
     //city partition
     var partCity = partition(unitLibrary, cityValid);
-    cityActiveUnits = partNodes.valid;
+    cityActiveUnits = partCity.valid;
     
-    //search filter partition
-    var partSearch = partition(partNodes.valid, searchValid);
-    var validNodes = partSearch.valid
-    var invalidNodes = partCity.invalid.concat(partSearch.invalid);
-    
-    $(validNodes).show();
-    $(invalidNodes).hide();
+    $(partCity.invalid.map(jQueryIsBeingStupid)).hide();
+    applySearchFilter();
+}
+
+function jQueryIsBeingStupid(unit){
+    return unit._domNode.get(0);
 }
 
 //City filter changes less frequently than search filter
 function applySearchFilter(){
     var searchValid = searchFilter();
-    var partSearch = partition(cityActiveUnits, searchFilter);
+    var partSearch = partition(cityActiveUnits, searchValid);
     
-    $(partSearch.valid).show();
-    $(partSearch.invalid).hide();
+    $(partSearch.valid.map(jQueryIsBeingStupid)).show();
+    $(partSearch.invalid.map(jQueryIsBeingStupid)).hide();
 }
 
 //Utility:
@@ -357,9 +358,10 @@ function applySearchFilter(){
 //    valid - things that satisfy the predicate.
 //    invalid - things that don't.
 function partition(arr, isValid) {
-    var result;
-    result.valid = [];
-    result.invalid = [];
+    var result = {
+        valid: [],
+        invalid: [],
+    };
     
     for (var i = 0, len = arr.length; i < len; i++) {
         var item = arr[i];
@@ -377,13 +379,16 @@ function partition(arr, isValid) {
 function parseSearch(searchInput){
     //var delimiter = /,\s*/;
     var delimiter = /\s+/;
-    var values = searchInput.toLowerCase().split(delimiter);
+    var values = searchInput.toLowerCase().trim().split(delimiter);
     var keywords = []; //words to find
     var properties = {}; //properties needed
 
     for (var i=0, len=values.length; i<len; i++){
         var val = values[i];
-        if (val.charAt(0) == '!' && i+1 < len) { //it's a keyword
+        if (val.charAt(0) == '!') { //it's a keyword
+            if (i+1 == len) {
+                continue; //ignore it if it's the last term
+            }
             var propertyName = val.substring(1);
                 //TODO: Allow synonyms like "!n Groff".
                 //TODO: Validate properties and ignore invalid properties.
