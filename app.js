@@ -12,6 +12,7 @@ $(document).ready(function() {
         
         unitLibrary = extractUnitData(hgJson, unitTemplate);
         cityLibrary = extractCityData(hgJson, cityTemplate);
+        cityActiveUnits = unitLibrary; //initialization
         populateCities();
         populateUnits();
     });
@@ -276,7 +277,6 @@ function populateUnits() {
     for (var i = 0 ; i < unitLibrary.length ; i++) {
         unitNodes.push(unitLibrary[i]._domNode);
     }
-    cityActiveUnits = unitNodes; //initialization
     $(".units").append(unitNodes);
 }
 
@@ -297,6 +297,10 @@ function searchFilter() {
     
     function isValid(unit){
         var searchText = unit._searchText;
+        
+        if (searchText === undefined){
+            console.log(unit);
+        }
         
         //Check all properties.
         for (var propertyName in properties){
