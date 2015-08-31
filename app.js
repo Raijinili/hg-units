@@ -1,6 +1,7 @@
 
 var unitLibrary = [];
 var cityLibrary = [];
+var cityActiveUnits = [];
 $(document).ready(function() {
 
     // Get the data from Highgrounds git repo and populate results.
@@ -8,30 +9,28 @@ $(document).ready(function() {
                     '/HighgroundsAssets/master/data/1stEdition.xml';
     var hgData = $.get(indexURL, function() {
 
-        unitLibrary = extractUnitData(parseHighgroundsXml(hgData));
-        cityLibrary = extractCityData(parseHighgroundsXml(hgData));
-        populateCities(cityLibrary, cityTemplate);
-        populateUnits(unitLibrary, unitTemplate);
+        unitLibrary = extractUnitData(parseHighgroundsXml(hgData), unitTemplate);
+        cityLibrary = extractCityData(parseHighgroundsXml(hgData), cityTemplate);
+        populateCities(cityLibrary);
+        populateUnits(unitLibrary);
     });
 
 
     // Event handlers
     $('.cities').on('click', ".city", function() {
         $(this).toggleClass('button-primary');
-        $('.units').empty();
-        populateUnits(filterUnits(unitLibrary, getActiveCities()), unitTemplate);
-        searchFilter();
+        applyAllFilters();
     });
 
     $(".buttons i").on("click", function() {
         $(".search-instructions").toggle();
     });
 
-    $(".units ").on("error abort", ".unit-sprite img", function() {
+    $(".units").on("error abort", ".unit-sprite img", function() {
         this.src="images/outline.png";
     });
 
-    $("#search").on("keyup", searchFilter);
+    $("#search").on("keyup", applySearchFilter);
 
 
     // Templating.
@@ -56,11 +55,15 @@ function parseHighgroundsXml(hgData) {
 }
 
 
-function extractCityData(hgJson) {
+function extractCityData(hgJson, cityTemplate) {
 
     // Build an array of objects from the JSON data holding all cities.
     var cities = [];
-    rawCities = hgJson.data.CITYLIST.CITY;
+    var rawCities = hgJson.data.CITYLIST.CITY;
+    // Sort cities for friendly button order.
+    var cityOrder = ["Titan Ridge", "Dwila", "Sacred Woods", "The Helm",
+                     "Crystal Camp", "Outfitter", "The Den", "The Grotto",
+                     "Forest Village", "Shadow Pylon"];
 
     // Omit the first "dummy" unit.
     for (var i = 1 ; i < rawCities.length ; i++) {
@@ -70,7 +73,7 @@ function extractCityData(hgJson) {
         var gold = 0;
         var crystal = 0;
         var wood = 0;
-        var recrui = 0;
+        var recruit = 0;
 
         // Plug in resource production and recruit.
         for (var j = 0 ; j < rawCity.ACTION.length ; j ++) {
@@ -102,7 +105,7 @@ function extractCityData(hgJson) {
             types.push(rawCity.TYPE["#text"]);
         }
 
-        cities.push({
+        var city = {
             "name": attributes.name,
             "id": attributes.id,
             "rarity": attributes.rarity,
@@ -113,16 +116,12 @@ function extractCityData(hgJson) {
             "crystal": crystal,
             "wood": wood,
             "recruit": recruit
-        });
-    }
-
-    // Sort cities for friendly button order.
-    var cityOrder = ["Titan Ridge", "Dwila", "Sacred Woods", "The Helm",
-                     "Crystal Camp", "Outfitter", "The Den", "The Grotto",
-                     "Forest Village", "Shadow Pylon"];
-
-    for(var l = 0; l < cities.length; l++){
-        cities[l]._index = cityOrder.indexOf(cities[l].name);
+        };
+        
+        city._domNode = $(cityTemplate(city));
+        city._index = cityOrder.indexOf(city.name);
+        
+        cities.push(city);
     }
 
     cities.sort(function compareCities(a, b){
@@ -133,7 +132,7 @@ function extractCityData(hgJson) {
 }
 
 
-function extractUnitData(hgJson) {
+function extractUnitData(hgJson, unitTemplate) {
 
     // Build an array of objects from the JSON data holding all units.
     var rawCards = hgJson.data.CARDLIST.CARD;
@@ -213,9 +212,9 @@ function extractUnitData(hgJson) {
                       "!edition", card.edition,
                       ].join(" ");
         */
-        card.domNode = $(unitTemplate(card));
+        card._domNode = $(unitTemplate(card));
         
-        card.searchText = card.domNode.text().trim().split(/\s+/).join(" ");
+        card._searchText = card.domNode.text().trim().split(/\s+/).join(" ").toLowerCase();
         cards.push(card);
     }
     return cards;
@@ -224,9 +223,6 @@ function extractUnitData(hgJson) {
 
 function getActiveCities() {
     activeButtons = $('.button-primary');
-    if (activeButtons.length === 0) {
-        return cityLibrary;
-    }
     return cityLibrary.filter(function(city) {
         for (var i = 0 ; i < activeButtons.length ; i++) {
             if ($(activeButtons[i]).data("cityId") === city.id) {
@@ -237,8 +233,18 @@ function getActiveCities() {
 }
 
 
-function filterUnits(unitLibrary, activeCities) {
-    return unitLibrary.filter(function(unit) {
+function cityFilter() {
+    //Todo: There are few enough cities that we can just have a list of units for each city.
+    //We can also have a unit point to which cities it's active on.
+    
+    var activeCities = getActiveCities();
+    
+    //If no cities are on, show all units.
+    if (activeCities.length == 0){
+        return function() {return true;}
+    }
+    
+    return function(unit) {
 
         // Always include free units.
         if (unit.cost.gold === 0 && unit.cost.crystal === 0 && unit.cost.wood === 0 ) {
@@ -254,47 +260,148 @@ function filterUnits(unitLibrary, activeCities) {
                 return true;
             }
         }
-    });
+    };
 }
 
-    
-function populateUnits(units, unitTemplate) {
+
+function populateUnits() {
+    // //Slower due to multiple function calls?
+    // $(".cities").append(cities.map(function(elem){
+        // return elem._domNode;
+    // });
+
     var unitNodes = [];
-    for (var i = 0 ; i < units.length ; i++) {
-        var unit = units[i];
-        unitNodes.push(unit.domNode);
+    for (var i = 0 ; i < unitLibrary.length ; i++) {
+        unitNodes.push(unitLibrary[i]._domNode);
     }
     
     $(".units").append(unitNodes);
 }
 
     
-function populateCities(cities, cityTemplate) {
-
-    for (var j = 0 ; j < cities.length ; j++) {
-        var city = cities[j];
-        city["cache"] = city["cache"] || $(cityTemplate(city));
-        $(".cities").append(city["cache"]);
+function populateCities() {
+    var cityNodes = new Array(cityLibrary.length); //to add all at once
+    for (var j = 0 ; j < cityLibrary.length ; j++) {
+        cityNodes.push(cityLibrary[j]._domNode);
     }
+    $(".cities").append(cityNodes);
 }
 
 
 function searchFilter() {
-    var values = $("#search").val().toLowerCase().split(",");
-
-    $(".units .unit").each(function() {
-        var matches = [];
-        var searchText = $(this).data("searchText").toLowerCase();
+    var parsedSearch = parseSearch($("#search").val());
+    var keywords = parsedSearch.keywords,
+        properties = parsedSearch.properties;
+    
+    function isValid(unit){
+        var searchText = unit._searchText;
         
-        for (var i = 0 ; i < values.length ; i++) {
-            matches.push(searchText.search(values[i]) > -1);
+        //Check all properties.
+        for (var propertyName in properties){
+            //assume all units have the same properties
+            //later: assume all property names are valid.
+            if (!unit.hasOwnProperty(propertyName)) {
+                delete properties[propertyName]; //delete invalid key when detected
+            }
+            var propertyValue = properties[propertyName];
+            var unitValue = unit[propertyName].toLowerCase();
+            
+            if (unitValue.search(propertyValue) == -1) {
+                return false;
+            }
         }
+        
+        //Check all keywords.
+        for (var i = 0 ; i < keywords.length ; i++) {
+            if (searchText.search(keyword[i]) == -1) {
+                return false;
+            }
+        }
+        
+        return true; //failed to invalidate
+    }
+    
+    return isValid;
+}
 
-        if(matches.indexOf(false) > -1) {
-            $(this).hide();
+
+function applyAllFilters(){
+    
+    var cityValid = cityFilter();
+    var searchValid = searchFilter();
+    
+    //city partition
+    var partCity = partition(unitLibrary, cityValid);
+    cityActiveUnits = partNodes.valid;
+    
+    //search filter partition
+    var partSearch = partition(partNodes.valid, searchValid);
+    var validNodes = partSearch.valid
+    var invalidNodes = partCity.invalid.concat(partSearch.invalid);
+    
+    $(validNodes).show();
+    $(invalidNodes).hide();
+}
+
+//City filter changes less frequently than search filter
+function applySearchFilter(){
+    var searchValid = searchFilter();
+    var partSearch = partition(cityActiveUnits, searchFilter);
+    
+    $(partSearch.valid).show();
+    $(partSearch.invalid).hide();
+}
+
+//Utility:
+// Returns a pair {valid:, invalid:} of arrays
+//    valid - things that satisfy the predicate.
+//    invalid - things that don't.
+function partition(arr, isValid) {
+    var result;
+    result.valid = [];
+    result.invalid = [];
+    
+    for (var i = 0, len = arr.length; i < len; i++) {
+        var item = arr[i];
+        if (isValid(item)) {
+            result.valid.push(item);
+        } else {
+            result.invalid.push(item);
         }
-        else {
-            $(this).show();
+    }
+    return result;
+}
+
+//Returns a unit validator.
+// searchInput -> (unit -> boolean)
+function parseSearch(searchInput){
+    //var delimiter = /,\s*/;
+    var delimiter = /\s+/;
+    var values = searchInput.toLowerCase().split(delimiter);
+    var keywords = []; //words to find
+    var properties = {}; //properties needed
+
+    for (var i=0, len=values.length; i<len; i++){
+        var val = values[i];
+        if (val.charAt(0) == '!' && i+1 < len) { //it's a keyword
+            var propertyName = val.substring(1);
+                //TODO: Allow synonyms like "!n Groff".
+                //TODO: Validate properties and ignore invalid properties.
+                //Todo: Suggest an alternative syntax like "n:Groff".
+                //      (Maybe just duplicate GMail's format?)
+                //Todo: Minus sign to eliminate stuff.
+                //Todo: quoted strings (note: would ruin implementation and is also useless)
+            if (propertyName.charAt(0) == '_') { //private property
+                continue; //ignore it
+            }
+            //eat the propertyValue
+            var propertyValue = values[i+1];
+            i++;
+            properties[propertyName] = propertyValue;
+        } else { //just a regular keyword
+            keywords.push(val);
         }
-    });
+    }
+    
+    return {keywords:keywords, properties:properties};
 }
